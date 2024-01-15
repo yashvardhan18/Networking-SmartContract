@@ -8,23 +8,26 @@ import "hardhat/console.sol";
 contract Networking is OwnableUpgradeable {
     struct UserDetails {
         uint256 totalInvestment; // user's total deposit
-        uint256 claimedDistributeRI; // total claimed Daily interest
+        uint256 depositTime;
+        uint256 totalDistributeRI; // total claimed Daily interest
         uint256 refereeCount;
         uint256 claimedIncome; 
         uint256 withdrawedIncome;
         uint256 token;
         address referrerAddress;
-        string rank;
+        uint8 rank;
         uint256 depositCount;
-        mapping(uint256 => uint256)depositAmount;
-        mapping(uint256=>bool) depositClaimed;
-        mapping(uint256 => uint256) depositTime;
+        // mapping(uint256 => uint256)depositAmount;
+        // mapping(uint256=>bool) depositClaimed;
+        // mapping(uint256 => uint256) depositTime;
     }
 
     address public stakeToken;
     address public rewardWallet;
     uint256 serviceChargeAmount;
     // uint128 public countMembers;
+
+
     uint128 public ROIpercent;
     uint128 public ROITime;
     uint128 public maxDeposit;
@@ -34,9 +37,9 @@ contract Networking is OwnableUpgradeable {
     mapping(address => uint256) public referralIncome;
     mapping(address => uint256) public claimedROIIncome;
     mapping(address => UserDetails) public Details;
-    mapping(string => mapping(uint8 => uint128)) public packageThreshold;
-    // mapping(uint8 => uint256) public levelThreshold;
+    mapping(uint8 => mapping(uint8 => uint128)) public packageThreshold;
     mapping(address => uint8) public referrerCount;
+    // mapping(uint8 => uint256) public levelThreshold;
 
     error ZeroAmount();
     error InvalidRank();
@@ -110,30 +113,30 @@ contract Networking is OwnableUpgradeable {
         // _disableInitializers();
     }
 
-    function initialize(address _stakeToken,string [] memory ranks, uint8[] memory levels, uint128[] memory ROIPercentage) external initializer {
+    function initialize(address _stakeToken,uint8 [] memory ranks, uint8[] memory levels, uint128[] memory ROIPercentage, uint128 _ROIPercent) external initializer {
         __Ownable_init(msg.sender);
         stakeToken = _stakeToken;
         rewardWallet = owner();
         Details[owner()].totalInvestment = 1;
-        uint8 length_levels = uint8(levels.length);
-        uint8 ranks_levels = uint8(ranks.length);
-
-        for(uint i =0;i< ranks.length; i++){
-            for(uint j=0; j< levels.length; j++){
-                packageThreshold[ranks[i]][levels[j]] = ROIPercentage[j];
-            }
+        ROIpercent = _ROIPercent;
+        uint8 levels_length = uint8(levels.length);
+        uint8 ranks_length = uint8(ranks.length);
+        uint8 flag =0;
+        for(uint i =0;i<ranks_length; i++){
+            for(uint j=0; j< levels_length; j++){
+                packageThreshold[ranks[i]][levels[j]] = ROIPercentage[flag];
+                flag++;
+                
+            } 
         }
     
 
     }
 
-    function deposit(string memory _rank, uint8 level, address _referrer, uint256 amount) public {
+    function deposit(uint8  _rank, address _referrer, uint256 amount) public {
         address user = msg.sender;
         uint256 timeNow = block.timestamp;
 
-        if (level == 0 && level > 6) {
-            revert notVerified();
-        }
 
         if (_referrer == msg.sender) {
             revert InvalidReferrer();
@@ -152,8 +155,7 @@ contract Networking is OwnableUpgradeable {
             
             referrerCount[_referrer] += 1;
         }
-        console.log("test");
-        console.log(_referrer);
+     
 
         if (
             _referrer != address(0) &&
@@ -161,18 +163,20 @@ contract Networking is OwnableUpgradeable {
         ) {
             revert InvalidReferrer();
         }
+
+        _calculateRewards(user, Details[user].totalInvestment);
+
         Details[user].rank = _rank;
         Details[_referrer].refereeCount+=1;
-        Details[user].depositCount +=1;
-        Details[user].depositTime[Details[user].depositCount]= timeNow;
-        Details[user].depositAmount[Details[user].depositCount] = amount;
-        
+        Details[user].depositTime= timeNow;
+        Details[user].totalInvestment += amount;
         SafeERC20.safeTransferFrom(
             IERC20(stakeToken),
             user,
             address(this),
             amount
         );
+       
         emit Staked(
             user,
             Details[user].referrerAddress,
@@ -181,15 +185,15 @@ contract Networking is OwnableUpgradeable {
             Details[user].totalInvestment
         );
     }
-    function seeDeposit(address user, uint256 depositCount) external view returns(uint256){
-        return Details[user].depositAmount[depositCount];
-    }
+
     function distributeRI(address _user, uint256 _amount) internal returns (uint256){
         address[] memory referrers = new address[](6);
         referrers[0] = Details[_user].referrerAddress;
         uint8 i;
         // uint8 j;
         //populating the 15 members in referer array for the user
+        console.log("test 2");
+        
         for (i = 1; i < 6; i++) {
             referrers[i] = Details[referrers[i - 1]].referrerAddress;
             if (referrers[i] == address(0)) {
@@ -197,16 +201,21 @@ contract Networking is OwnableUpgradeable {
             }
         }
         uint256 numReferrers = i; // Number of valid referrers
+
         uint256 remainingReward = _amount;
+        console.log("amount", _amount);
         uint256[] memory rewardShares = new uint256[](numReferrers);
         // Calculate reward shares for each referrer
+        console.log("test3");
+        
         for (i = 0; i < numReferrers; i++) {
             if (referrers[i] != address(0)) {
-                rewardShares[i] = (_amount * getAmountPercentage(i,referrers[i])) / 10000;
+                rewardShares[i] = (_amount * getAmountPercentage(i+1,referrers[i])) / 10000;
               
                 remainingReward -= rewardShares[i];
             }
             referralIncome[referrers[i]] += rewardShares[i];
+            console.log("Calculated referral income", referralIncome[referrers[i]]);
             emit allocatedLevelIncome(
                 msg.sender,
                 referrers[i],
@@ -214,19 +223,23 @@ contract Networking is OwnableUpgradeable {
                 block.timestamp
             );
         }
+        // console.log("Final remaining reward",remainingReward);
+
+        console.log("remainingReward", remainingReward);
         return remainingReward;
+
     }
 
     function getAmountPercentage(
         uint8 position,
         address referrer
     ) internal view returns (uint256) {
-
+        console.log("Referral Percentage", packageThreshold[Details[referrer].rank][position]);
       return packageThreshold[Details[referrer].rank][position];
     }
 
     function setPackage(
-        string memory rank,
+        uint8  rank,
         uint8 level,
         uint128 _income
     ) external onlyOwner returns (uint128) {
@@ -245,17 +258,27 @@ contract Networking is OwnableUpgradeable {
 
     function _calculateRewards(
         address _user,
-        uint256 depositCount
+        uint256 amount
     ) public returns (uint256 reward) {
-    
+        console.log("amount1", amount);
         UserDetails storage details = Details[_user];
-        uint256 time = block.timestamp - details.depositTime[depositCount];
+        uint256 time = (block.timestamp - details.depositTime)/86400;
         uint256 Totalreward =
-            ((details.depositAmount[depositCount] * time * ROIpercent)/10000)+ referralIncome[_user];
-            referralIncome[_user] = 0;
-        reward = Totalreward - (Totalreward * 5000) / 10000;
+            ((amount * time * ROIpercent)/10000)+ referralIncome[_user];
+            console.log("total Reward",Totalreward);
+        if(Totalreward >= details.totalInvestment*2){
+        Totalreward = details.totalInvestment*2;
+        referralIncome[_user] = 0;
         serviceChargeAmount += (Totalreward * 5000) / 10000;
-        
+        reward = Totalreward - (Totalreward * 5000) / 10000;
+        }    
+        else{
+            revert ROINotReady();
+        }
+
+        // console.log("TotalReward",Totalreward);
+        // console.log("reward after service fee",reward);
+        Details[_user].totalDistributeRI += reward;
         return distributeRI(_user, reward);
     }
 
@@ -327,31 +350,25 @@ contract Networking is OwnableUpgradeable {
     //         return 1; // Percentage for the rest
     //     }
     // }
-    function withdrawReward(uint256 _amount, uint256 depositCount) public {
+    function withdrawReward(uint256 _amount) public {
         UserDetails storage details = Details[msg.sender];
         if(_amount < minWithdrawalAmount){
             revert InvalidWithdrawalAmount();
         }
-        if(details.depositAmount[depositCount]==0){
-            // revert ;
-        }
-        address user = msg.sender;
-        uint256 time = block.timestamp - details.depositTime[depositCount];
-        if(time > ROITime){
-            revert ROINotReady();
-        }
-        uint256 roiIncome = _calculateRewards(user,depositCount);
-        // uint256 remainingReward = distributeRI(msg.sender, roiIncome);
-    if(_amount > referralIncome[user]){
+
+      
+
+    if(_amount > Details[msg.sender].totalInvestment){
         revert InvalidWithdrawalAmount();
     }
+
+    _calculateRewards(msg.sender, _amount);
 //========================================================================================================//
 
-        referralIncome[user] -= _amount;
-        claimedROIIncome[user] += roiIncome;
+        claimedROIIncome[msg.sender] += _amount;
         details.withdrawedIncome += _amount;
-      details.depositAmount[depositCount] = 0;
-        SafeERC20.safeTransfer(IERC20(stakeToken), user, _amount);
+        details.totalDistributeRI -= _amount;
+        SafeERC20.safeTransfer(IERC20(stakeToken), msg.sender, _amount);
 
         // details.depositTime = block.timestamp;
     }
@@ -362,4 +379,8 @@ contract Networking is OwnableUpgradeable {
     //     // details.lockedIncome = (tokenIncome * 50) / 100;
     //     details.swapIncome = tokenIncome - details.lockedIncome;
     // }
+
+    function seeDeposit(address user, uint256 depositCount) external view returns(uint256){
+        return Details[user].totalInvestment;
+    }
 }

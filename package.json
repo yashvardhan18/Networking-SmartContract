@@ -5,6 +5,8 @@
     "hardhat": "^2.19.4"
   },
   "dependencies": {
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.10",
+    "@nomiclabs/hardhat-ethers": "^2.2.3",
     "@openzeppelin/contracts-upgradeable": "^5.0.1",
     "ethers": "^5.7.2",
     "hardhat-waffle": "*",

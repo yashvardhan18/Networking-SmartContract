@@ -1,3 +1,5 @@
 {
-    "prettier.insertPragma": true
+    "prettier.insertPragma": true,
+    "slither.solcPath": "",
+    "slither.hiddenDetectors": []
 }
