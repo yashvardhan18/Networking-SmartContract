@@ -53,16 +53,23 @@ describe("Lock", function () {
       await myNetworking.connect(signers[3]).deposit(6,signers[2].address,expandTo6Decimals(1000));
       await myNetworking.connect(signers[4]).deposit(1,signers[3].address,expandTo6Decimals(1000));
       await myNetworking.connect(signers[5]).deposit(3,signers[4].address,expandTo6Decimals(1000));
-      await myNetworking.connect(signers[6]).deposit(5,signers[5].address,expandTo6Decimals(1000));
+      await myNetworking.connect(signers[6]).deposit(1,signers[5].address,expandTo6Decimals(1000));
 
 
       // console.log(await myNetworking.seeDeposit(signers[1].address,1));
       // console.log(await myNetworking.Details(owner.address));
 
-      await network.provider.send("evm_increaseTime", [12960000000000])
+      await network.provider.send("evm_increaseTime", [12232000])
       await network.provider.send("evm_mine");
 
       await myNetworking.connect(signers[6]).withdrawReward(expandTo6Decimals(200));
+      await myNetworking.connect(signers[6]).withdrawReward(expandTo6Decimals(160));
+
+      
+      await myNetworking.connect(signers[5]).withdrawReward(expandTo6Decimals(160));
+
+      
+
       // console.log("Referral Income",await myNetworking.referralIncome(owner.address));
       // console.log("Referral Income",await myNetworking.Details(signers[6].address));
 
