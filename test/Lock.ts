@@ -1,7 +1,7 @@
 /** @format */
 
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers";
 import {
   Networking,
@@ -33,10 +33,53 @@ describe("Lock", function () {
         [1, 2, 3, 4, 5, 6],
         [1, 2, 3, 4, 5, 6],
         [
-          1200, 700, 500, 300, 200, 100, 1300, 800, 550, 350, 250, 150, 1400,
-          900, 600, 400, 300, 200, 1500, 1000, 650, 450, 350, 250, 1800, 1100,
-          700, 500, 400, 300, 2000, 1200, 750, 550, 450, 350,
+          1200,
+          700,
+          500,
+          300,
+          200,
+          100,
+          1300,
+          800,
+          550,
+          350,
+          250,
+          150,
+          1400,
+          900,
+          600,
+          400,
+          300,
+          200,
+          1500,
+          1000,
+          650,
+          450,
+          350,
+          250,
+          1800,
+          1100,
+          700,
+          500,
+          400,
+          300,
+          2000,
+          1200,
+          750,
+          550,
+          450,
+          350,
         ],
+        [
+          expandTo6Decimals(50),
+          expandTo6Decimals(100),
+          expandTo6Decimals(250),
+          expandTo6Decimals(500),
+          expandTo6Decimals(750),
+          expandTo6Decimals(850),
+          expandTo6Decimals(1000),
+        ],
+        [6000, 2000, 1200, 800, 0, 0],
         150
       );
   });
@@ -106,8 +149,18 @@ describe("Lock", function () {
         .connect(signers[6])
         .deposit(1, signers[5].address, expandTo6Decimals(1000));
 
-      // console.log(await myNetworking.seeDeposit(signers[1].address,1));
-      // console.log(await myNetworking.Details(owner.address));
+      console.log(
+        "Signers 1investment",
+        await myNetworking.seeInvestment(signers[1].address)
+      );
+      console.log(
+        "Details for Owner address",
+        await myNetworking.Details(owner.address)
+      );
+      console.log(
+        "Details for Signer 1",
+        await myNetworking.Details(signers[1].address)
+      );
 
       await network.provider.send("evm_increaseTime", [12232000]);
       await network.provider.send("evm_mine");
@@ -123,10 +176,71 @@ describe("Lock", function () {
         .connect(signers[5])
         .withdrawReward(expandTo6Decimals(160));
 
-      // console.log("Referral Income",await myNetworking.referralIncome(owner.address));
-      // console.log("Referral Income",await myNetworking.Details(signers[6].address));
+      // console.log("Referral Income for owner",await myNetworking.referralIncome(owner.address));
     });
 
-    it("");
+    it.only("Test case to check the recurrence of robo fee ", async () => {
+      await mockUsdc
+        .connect(owner)
+        .mint(signers[1].address, expandTo6Decimals(3000000));
+      await mockUsdc
+        .connect(owner)
+        .approve(myNetworking.address, expandTo6Decimals(3000000));
+      await mockUsdc
+        .connect(signers[1])
+        .approve(myNetworking.address, expandTo6Decimals(3000000));
+
+      await myNetworking
+        .connect(owner)
+        .deposit(1, zeroAddress, expandTo6Decimals(2000));
+
+      await myNetworking
+        .connect(signers[1])
+        .deposit(1, owner.address, expandTo6Decimals(2000));
+      console.log(
+        "===================================================================="
+      );
+      await myNetworking
+        .connect(signers[1])
+        .deposit(1, owner.address, expandTo6Decimals(2000));
+      console.log(
+        "===================================================================="
+      );
+
+      await myNetworking
+        .connect(signers[1])
+        .deposit(1, owner.address, expandTo6Decimals(4000));
+      console.log(
+        "===================================================================="
+      );
+
+      await myNetworking
+        .connect(signers[1])
+        .deposit(1, owner.address, expandTo6Decimals(8000));
+      console.log(
+        "===================================================================="
+      );
+
+      await myNetworking
+        .connect(signers[1])
+        .deposit(1, owner.address, expandTo6Decimals(16000));
+      console.log(
+        "===================================================================="
+      );
+
+      await myNetworking
+        .connect(signers[1])
+        .deposit(1, owner.address, expandTo6Decimals(32000));
+      console.log(
+        "===================================================================="
+      );
+
+      await myNetworking
+        .connect(signers[1])
+        .deposit(1, owner.address, expandTo6Decimals(64000));
+      console.log(
+        "===================================================================="
+      );
+    });
   });
 });
