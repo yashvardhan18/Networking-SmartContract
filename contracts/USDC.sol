@@ -21,10 +21,6 @@ contract Usdc is IERC20, ERC20Burnable{
 		return 6;
 	}
 
-    function transfer(address from, address to , uint256 _amount) external {
-        require(to!=address(0),"Zero address sent");
-        _transfer(from,to, _amount);
-    }
 
 
 }
