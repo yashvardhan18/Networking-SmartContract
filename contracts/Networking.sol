@@ -4,13 +4,11 @@
  * @title Networking Contract
  * @dev A contract for managing user investments, rewards, and referrals.
  */
-pragma solidity = 0.8.20;
+pragma solidity =0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-
-import "hardhat/console.sol";
 
 contract Networking is OwnableUpgradeable {
     using SafeERC20 for IERC20;
@@ -48,6 +46,7 @@ contract Networking is OwnableUpgradeable {
     mapping(uint8 => mapping(uint8 => uint128)) public packageThreshold;
     mapping(uint => uint256) roboFee;
     mapping(uint => uint256) roboLevelPercentage;
+    mapping(address => bool) blacklistedUsers;
 
     // Errors
     error ZeroAmount();
@@ -60,11 +59,18 @@ contract Networking is OwnableUpgradeable {
     error InvalidUser();
     error InvalidWithdrawalAmount();
     error InvalidDepositAmount();
+    error UserBlackListed();
 
     // Events
-    event depositAmount(address indexed user, uint256 indexed amount);
+    event depositAmount(
+        address indexed user,
+        address indexed referrer,
+        uint256 indexed amount,
+        uint256 depositTime,
+        uint256 totalInvestment
+    );
     event withdrawIncome(
-        address indexed receiver,
+        address indexed user,
         uint256 indexed amount,
         uint256 indexed timestamp
     );
@@ -147,7 +153,7 @@ contract Networking is OwnableUpgradeable {
         }
 
         // Validate deposit amount
-        if (amount < 100000000 || amount > 5000000000000) {
+        if (amount < minDeposit || amount > maxDeposit) {
             revert InvalidDepositAmount();
         }
 
@@ -182,7 +188,13 @@ contract Networking is OwnableUpgradeable {
 
         IERC20(stakeToken).safeTransferFrom(user, address(this), amount);
 
-        emit depositAmount(user, amount);
+        emit depositAmount(
+            user,
+            _referrer,
+            amount,
+            block.timestamp,
+            Details[user].totalInvestment
+        );
     }
 
     /**
@@ -328,7 +340,13 @@ contract Networking is OwnableUpgradeable {
     ) internal view returns (uint256) {
         return roboLevelPercentage[position];
     }
+    function setMinDepositAmount(uint128 _newLimit) external onlyOwner {
+        minDeposit = _newLimit;
+    }
 
+    function setMaxDepositAmount(uint128 _newLimit) external onlyOwner {
+        maxDeposit = _newLimit;
+    }
     /**
      * @notice  Sets the percentage for a level of a rank.
      * @dev     Allows the owner to set the percentage for a level of a rank.
@@ -347,7 +365,7 @@ contract Networking is OwnableUpgradeable {
         if (level < 1 || level > 6) {
             revert InvalidLevel();
         }
-
+ 
         if (
             _income < packageThreshold[rank][level + 1] ||
             _income > packageThreshold[rank][level - 1]
@@ -365,26 +383,28 @@ contract Networking is OwnableUpgradeable {
             ROIpercent) / 10000);
 
         uint serviceCharge = (TotalROI * 5000) / 10000;
-        reward = TotalROI - (TotalROI * 5000) / 10000;
+        reward = TotalROI - serviceCharge;
         Details[_user].totalReward += referralIncome[msg.sender] + reward;
         referralIncome[_user] = 0;
 
         return distributeROI(_user, serviceCharge);
     }
 
-    /**
-     * @notice  Sets the rank for the Users..
-     * @dev     Allows the owner to set the rank for the user.
-     * @param   _user  address of the user.
-     * @param   _newRank  new rank for the user.
-     */
-    function setUserRank(address _user, uint8 _newRank) external onlyOwner {
-        if (_user == address(0)) {
-            revert ZeroAddress();
-        }
-        if (_newRank < 1 || _newRank > 6) {
-            revert InvalidRank();
-        }
+    // /**
+    //  * @notice  Sets the rank for the Users..
+    //  * @dev     Allows the owner to set the rank for the user.
+    //  * @param   _user  address of the user.
+    //  * @param   _newRank  new rank for the user.
+    //  */
+    function setRefferersRank(address _user, uint8 _newRank) external onlyOwner{
+    
+    if(_user == address(0)){
+        revert ZeroAddress();
+    }
+
+    if(_newRank <=0 || _newRank >6){
+        revert  InvalidRank();
+    }
 
         Details[_user].rank = _newRank;
     }
@@ -394,6 +414,7 @@ contract Networking is OwnableUpgradeable {
      * @dev Allows the owner to set the ROI percentage for the network.
      * @param _percent The new ROI percentage.
      */
+
     function setROIPercentage(uint128 _percent) external onlyOwner {
         if (_percent == 0) {
             revert ZeroAmount();
@@ -410,49 +431,55 @@ contract Networking is OwnableUpgradeable {
         minWithdrawalAmount = _newLimit;
     }
 
-    /**
+    /** 
      * @notice Allows a user to withdraw their reward.
      * @dev Handles the withdrawal of rewards for a user.
-     * @param _amount The amount to be withdrawn.
      */
-    function withdrawReward(uint256 _amount) external {
+    function withdrawReward() external {
+        if(blacklistedUsers[msg.sender]){
+            revert UserBlackListed();
+        }
+        address _user = msg.sender;
         UserDetails storage details = Details[msg.sender];
         _calculateRewards(msg.sender);
-        if (_amount < minWithdrawalAmount) {
-            revert BelowMinLimit();
-        }
 
-        if (_amount > Details[msg.sender].totalReward) {
+        uint RoiAmount = details.totalReward;
+        uint RoboReward = details.roboReward;
+        if (RoiAmount+RoboReward < minWithdrawalAmount) {
             revert InvalidWithdrawalAmount();
         }
 
-        Details[msg.sender].depositTime = block.timestamp;
+        details.depositTime = block.timestamp;
 
-        details.withdrawedReward += _amount;
-        details.totalReward -= _amount;
+        details.withdrawedReward += details.totalReward + details.roboReward;
+        details.totalReward = 0;
+        details.roboReward = 0;
 
-        IERC20(stakeToken).safeTransfer(msg.sender, _amount);
 
-        emit withdrawIncome(msg.sender, _amount, block.timestamp);
+        IERC20(stakeToken).safeTransfer(_user, RoiAmount);
+        IERC20(stakeToken).safeTransfer(_user, RoboReward);
+
+        emit withdrawIncome(_user, RoiAmount, block.timestamp);
+        emit withdrawnRoboIncome(_user, RoboReward, block.timestamp);
     }
 
-    /**
-     * @notice Allows a user to withdraw their robo income.
-     * @dev Handles the withdrawal of robo income for a user.
-     * @param _amount The amount to be withdrawn.
-     */
-    function withdrawRoboIncome(uint256 _amount) external {
-        address _user = msg.sender;
+    // /**
+    //  * @notice Allows a user to withdraw their robo income.
+    //  * @dev Handles the withdrawal of robo income for a user.
+    //  * @param _amount The amount to be withdrawn.
+    //  */
+    // function withdrawRoboIncome(uint256 _amount) external {
+    //     address _user = msg.sender;
 
-        if (_amount > Details[_user].roboReward) {
-            revert InvalidWithdrawalAmount();
-        }
+    //     if (_amount > Details[_user].roboReward) {
+    //         revert InvalidWithdrawalAmount();
+    //     }
 
-        Details[_user].roboReward -= _amount;
-        IERC20(stakeToken).safeTransfer(_user, _amount);
+    //     Details[_user].roboReward -= _amount;
+    //     IERC20(stakeToken).safeTransfer(_user, _amount);
 
-        emit withdrawnRoboIncome(_user, _amount, block.timestamp);
-    }
+    //     emit withdrawnRoboIncome(_user, _amount, block.timestamp);
+    // }
 
     /**
      * @notice Allows a user to withdraw their investment.
@@ -465,10 +492,11 @@ contract Networking is OwnableUpgradeable {
         }
         _calculateRewards(_user);
         uint _investmentAmount = Details[_user].totalInvestment;
-        if (Details[_user].totalReward < Details[_user].totalInvestment) {
+        if (block.timestamp < Details[_user].depositTime + (_investmentAmount / ROIpercent)) {
             uint256 preMatureFine = (Details[_user].totalInvestment * 3000) /
                 10000;
             _investmentAmount -= preMatureFine;
+            blacklistedUsers[msg.sender] = true;
         }
 
         Details[_user].totalInvestment = 0;
@@ -482,37 +510,15 @@ contract Networking is OwnableUpgradeable {
      * Withdraw Service Charge and Company Robo Reward
      * @dev Allows the owner to withdraw service charge and company robo reward.
      */
-    function withdrawServiceChargeAmountAndCompanyRoboReward(
-        uint256 _serviceChargeAmount,
-        uint256 _roboRewardAmount
-    ) external onlyOwner {
-        /**
-         * @dev Checks if the requested service charge amount is valid.
-         * @dev Reverts with "InvalidWithdrawalAmount" if the requested amount is greater than the available service charge.
-         */
-        if (_serviceChargeAmount > serviceChargeAmount) {
-            revert InvalidWithdrawalAmount();
-        }
-
-        /**
-         * @dev Checks if the requested robo reward amount is valid.
-         * @dev Reverts with "InvalidWithdrawalAmount" if the requested amount is greater than the available company robo reward.
-         */
-        if (_roboRewardAmount > companyRoboReward) {
-            revert InvalidWithdrawalAmount();
-        }
-
-        // Deducts the service charge and robo reward from the respective balances
-        serviceChargeAmount -= _serviceChargeAmount;
-        companyRoboReward -= _roboRewardAmount;
+    function withdrawServiceChargeAmountAndCompanyRoboReward() external onlyOwner {
 
         // Transfers the deducted amounts to the owner
         SafeERC20.safeTransfer(
             IERC20(stakeToken),
             owner(),
-            _serviceChargeAmount
+            serviceChargeAmount
         );
-        SafeERC20.safeTransfer(IERC20(stakeToken), owner(), _roboRewardAmount);
+        SafeERC20.safeTransfer(IERC20(stakeToken), owner(), companyRoboReward);
     }
 
     /**
@@ -529,16 +535,42 @@ contract Networking is OwnableUpgradeable {
     }
 
     /**
-     * @notice  See total reward amount
+     * @notice  See total ROI amount
      * @dev     Allows users to view the total reward amount of the user.
      * @param   user  .
      * @return  uint256  .
      */
-    function Totalreward(address user) external view returns (uint256) {
+    function TotalReferralIncome(address user) external view returns (uint256) {
         if (msg.sender != user) {
             revert InvalidUser();
         }
-        return Details[user].totalReward;
+        return referralIncome[user];
+    }
+
+        /**
+     * @notice  See total ROI amount
+     * @dev     Allows users to view the total reward amount of the user.
+     * @param   _user  .
+     * @return  uint256.
+     */
+    function TotalROIIncome(address _user) public view returns (uint256 ) {
+
+        UserDetails storage details = Details[_user];
+        uint256 time = (block.timestamp - details.depositTime) / 86400;
+        return ((Details[_user].totalInvestment *
+            time *
+            ROIpercent) / 10000);
+    }
+    /**
+     * @notice  See total reward amount
+     * @dev     Allows users to view the total reward amount of the user.
+     * @param   _user  .
+     * @return  uint256  .
+     */
+    function Totalreward(address _user) external view returns (uint256) {
+
+        
+        return (TotalROIIncome(_user) + Details[_user].roboReward);
     }
 
     /**

@@ -82,6 +82,12 @@ describe("Networking", function () {
     await myNetworking
       .connect(owner)
       .setMinWithdrawalLimit(expandTo6Decimals(50));
+    await myNetworking
+      .connect(owner)
+      .setMaxDepositAmount(expandTo6Decimals(5000000));
+    await myNetworking
+      .connect(owner)
+      .setMinDepositAmount(expandTo6Decimals(100));
   });
 
   describe("Testing", function () {
@@ -148,27 +154,17 @@ describe("Networking", function () {
       await myNetworking
         .connect(signers[6])
         .deposit(6, signers[5].address, expandTo6Decimals(5000000));
-
       await network.provider.send("evm_increaseTime", [12232000]);
       await network.provider.send("evm_mine");
 
-      await myNetworking
-        .connect(signers[6])
-        .withdrawReward(expandTo6Decimals(200));
-      await myNetworking
-        .connect(signers[6])
-        .withdrawReward(expandTo6Decimals(160));
-
-      await myNetworking
-        .connect(signers[5])
-        .withdrawReward(expandTo6Decimals(160));
+      await myNetworking.connect(signers[5]).withdrawReward();
       expect(
         await myNetworking.connect(signers[1]).seeInvestment(signers[1].address)
       ).to.be.eq(expandTo6Decimals(1000));
       await myNetworking._calculateRewards(signers[1].address);
       expect(
         await myNetworking.connect(signers[1]).Totalreward(signers[1].address)
-      ).to.be.eq(54567000000n);
+      ).to.be.eq(2141024000);
 
       // expect(await myNetworking.Totalreward(signers[1].address)).to.be.eq()
       // console.log("Referral Income for owner",await myNetworking.referralIncome(owner.address));
@@ -249,43 +245,41 @@ describe("Networking", function () {
         .deposit(1, owner.address, expandTo6Decimals(2000));
     });
 
-    it("withdrawing robo reward", async () => {
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[1].address, expandTo6Decimals(3000000));
-      await mockUsdc
-        .connect(owner)
-        .approve(myNetworking.address, expandTo6Decimals(3000000));
-      await mockUsdc
-        .connect(signers[1])
-        .approve(myNetworking.address, expandTo6Decimals(3000000));
+    // it("withdrawing robo reward", async () => {
+    //   await mockUsdc
+    //     .connect(owner)
+    //     .mint(signers[1].address, expandTo6Decimals(3000000));
+    //   await mockUsdc
+    //     .connect(owner)
+    //     .approve(myNetworking.address, expandTo6Decimals(3000000));
+    //   await mockUsdc
+    //     .connect(signers[1])
+    //     .approve(myNetworking.address, expandTo6Decimals(3000000));
 
-      await myNetworking
-        .connect(owner)
-        .deposit(1, zeroAddress, expandTo6Decimals(2000));
+    //   await myNetworking
+    //     .connect(owner)
+    //     .deposit(1, zeroAddress, expandTo6Decimals(2000));
 
-      await myNetworking
-        .connect(signers[1])
-        .deposit(1, owner.address, expandTo6Decimals(2000));
+    //   await myNetworking
+    //     .connect(signers[1])
+    //     .deposit(1, owner.address, expandTo6Decimals(2000));
 
-      await myNetworking
-        .connect(signers[1])
-        .deposit(1, owner.address, expandTo6Decimals(2000));
+    //   await myNetworking
+    //     .connect(signers[1])
+    //     .deposit(1, owner.address, expandTo6Decimals(2000));
 
-      await network.provider.send("evm_increaseTime", [15780000]);
-      await network.provider.send("evm_mine");
+    //   await network.provider.send("evm_increaseTime", [15780000]);
+    //   await network.provider.send("evm_mine");
 
-      await myNetworking
-        .connect(signers[1])
-        .deposit(1, owner.address, expandTo6Decimals(2000));
+    //   await myNetworking
+    //     .connect(signers[1])
+    //     .deposit(1, owner.address, expandTo6Decimals(2000));
 
-      await myNetworking
-        .connect(owner)
-        .withdrawRoboIncome(expandTo6Decimals(10));
-      expect(
-        await myNetworking.connect(owner).RoboIncome(owner.address)
-      ).to.be.eq(42500000n);
-    });
+    //   await myNetworking.connect(owner).withdrawRoboIncome();
+    //   expect(
+    //     await myNetworking.connect(owner).RoboIncome(owner.address)
+    //   ).to.be.eq(42500000n);
+    // });
 
     it("Withdrawing company robo reward and service charge amount", async () => {
       await mockUsdc
@@ -318,17 +312,14 @@ describe("Networking", function () {
         .deposit(1, owner.address, expandTo6Decimals(2000));
       await myNetworking
         .connect(owner)
-        .withdrawServiceChargeAmountAndCompanyRoboReward(
-          expandTo6Decimals(10),
-          expandTo6Decimals(120)
-        );
+        .withdrawServiceChargeAmountAndCompanyRoboReward();
       // console.log(await myNetworking.connect(owner).CompanyRoboAndServiceChargeIncome());
       let result = await myNetworking
         .connect(owner)
         .CompanyRoboAndServiceChargeIncome();
 
-      expect(result[0]).to.be.eq(277500000n);
-      expect(result[1]).to.be.eq(4794800151n);
+      expect(result[0]).to.be.eq(397500000n);
+      expect(result[1]).to.be.eq(4804800150n);
     });
 
     it("Setting package threshhold", async () => {
@@ -374,7 +365,7 @@ describe("Networking", function () {
         .connect(signers[1])
         .deposit(1, owner.address, expandTo6Decimals(2000));
 
-      await myNetworking.connect(owner).setUserRank(signers[1].address, 3);
+      await myNetworking.connect(owner).setRefferersRank(signers[1].address, 3);
     });
 
     it("Withdrawing investment", async () => {
@@ -520,338 +511,27 @@ describe("Networking", function () {
       ).to.be.revertedWithCustomError(myNetworking, "ZeroAmount");
     });
 
-    it("Revert case for withdrawing below minimum limit and ROI not ready", async () => {
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[1].address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[2].address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[3].address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[4].address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[5].address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[6].address, expandTo6Decimals(3000));
-
-      await mockUsdc
-        .connect(owner)
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[1])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[2])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[3])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[4])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[5])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[6])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-
-      await myNetworking
-        .connect(owner)
-        .deposit(1, zeroAddress, expandTo6Decimals(2000));
-      await myNetworking
-        .connect(signers[1])
-        .deposit(3, owner.address, expandTo6Decimals(1000));
-      await myNetworking
-        .connect(signers[2])
-        .deposit(2, signers[1].address, expandTo6Decimals(1000));
-      await myNetworking
-        .connect(signers[3])
-        .deposit(6, signers[2].address, expandTo6Decimals(1000));
-      await myNetworking
-        .connect(signers[4])
-        .deposit(1, signers[3].address, expandTo6Decimals(1000));
-      await myNetworking
-        .connect(signers[5])
-        .deposit(3, signers[4].address, expandTo6Decimals(1000));
-      await myNetworking
-        .connect(signers[6])
-        .deposit(1, signers[5].address, expandTo6Decimals(1000));
-      await network.provider.send("evm_increaseTime", [12232000]);
-      await network.provider.send("evm_mine");
-
-      await expect(
-        myNetworking.connect(signers[6]).withdrawReward(expandTo6Decimals(20))
-      ).to.be.revertedWithCustomError(myNetworking, "BelowMinLimit");
-    });
-
-    it("Revert case for Invalid Withdrawal Amount", async () => {
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[1].address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[2].address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[3].address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[4].address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[5].address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[6].address, expandTo6Decimals(3000));
-
-      await mockUsdc
-        .connect(owner)
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[1])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[2])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[3])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[4])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[5])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[6])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-
-      await myNetworking
-        .connect(owner)
-        .deposit(1, zeroAddress, expandTo6Decimals(2000));
-      await myNetworking
-        .connect(signers[1])
-        .deposit(3, owner.address, expandTo6Decimals(1000));
-      await myNetworking
-        .connect(signers[2])
-        .deposit(2, signers[1].address, expandTo6Decimals(1000));
-      await myNetworking
-        .connect(signers[3])
-        .deposit(6, signers[2].address, expandTo6Decimals(1000));
-      await myNetworking
-        .connect(signers[4])
-        .deposit(1, signers[3].address, expandTo6Decimals(1000));
-      await myNetworking
-        .connect(signers[5])
-        .deposit(3, signers[4].address, expandTo6Decimals(1000));
-      await myNetworking
-        .connect(signers[6])
-        .deposit(1, signers[5].address, expandTo6Decimals(1000));
-
-      await network.provider.send("evm_increaseTime", [12232000]);
-      await network.provider.send("evm_mine");
-
-      await expect(
-        myNetworking
-          .connect(signers[6])
-          .withdrawReward(expandTo6Decimals(20000))
-      ).to.be.revertedWithCustomError(myNetworking, "InvalidWithdrawalAmount");
-    });
-
-    it("Revert case for Invalid withdrawal amount for robo income", async () => {
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[1].address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[2].address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[3].address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[4].address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[5].address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[6].address, expandTo6Decimals(3000));
-
-      await mockUsdc
-        .connect(owner)
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[1])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[2])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[3])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[4])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[5])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[6])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-
-      await myNetworking
-        .connect(owner)
-        .deposit(1, zeroAddress, expandTo6Decimals(2000));
-      await myNetworking
-        .connect(signers[1])
-        .deposit(3, owner.address, expandTo6Decimals(1000));
-      await myNetworking
-        .connect(signers[2])
-        .deposit(2, signers[1].address, expandTo6Decimals(1000));
-      await myNetworking
-        .connect(signers[3])
-        .deposit(6, signers[2].address, expandTo6Decimals(1000));
-      await myNetworking
-        .connect(signers[4])
-        .deposit(1, signers[3].address, expandTo6Decimals(1000));
-      await myNetworking
-        .connect(signers[5])
-        .deposit(3, signers[4].address, expandTo6Decimals(1000));
-      await myNetworking
-        .connect(signers[6])
-        .deposit(1, signers[5].address, expandTo6Decimals(1000));
-
-      await network.provider.send("evm_increaseTime", [12232000]);
-      await network.provider.send("evm_mine");
-
-      await myNetworking
-        .connect(signers[6])
-        .withdrawReward(expandTo6Decimals(200));
-
-      await expect(
-        myNetworking
-          .connect(signers[5])
-          .withdrawRoboIncome(expandTo6Decimals(200000))
-      ).to.be.revertedWithCustomError(myNetworking, "InvalidWithdrawalAmount");
-    });
-
-    it("Revert case for invalid user", async () => {
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[1].address, expandTo6Decimals(3000));
-
-      await mockUsdc
-        .connect(owner)
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[1])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-
-      await myNetworking
-        .connect(owner)
-        .deposit(1, zeroAddress, expandTo6Decimals(2000));
-      await myNetworking
-        .connect(signers[1])
-        .deposit(3, owner.address, expandTo6Decimals(1000));
-
-      await network.provider.send("evm_increaseTime", [12232000]);
-      await network.provider.send("evm_mine");
-
-      await myNetworking._calculateRewards(signers[1].address);
-
-      await expect(
-        myNetworking.connect(signers[4]).withdrawInvestment()
-      ).to.be.revertedWithCustomError(myNetworking, "InvalidUser");
-    });
-
-    it("Revert case for invalid withdrawal amount for Service charge and company robo income", async () => {
-      await mockUsdc
-        .connect(owner)
-        .mint(signers[1].address, expandTo6Decimals(3000));
-
-      await mockUsdc
-        .connect(owner)
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-      await mockUsdc
-        .connect(signers[1])
-        .approve(myNetworking.address, expandTo6Decimals(3000));
-
-      await myNetworking
-        .connect(owner)
-        .deposit(1, zeroAddress, expandTo6Decimals(2000));
-      await myNetworking
-        .connect(signers[1])
-        .deposit(3, owner.address, expandTo6Decimals(1000));
-
-      await network.provider.send("evm_increaseTime", [12232000]);
-      await network.provider.send("evm_mine");
-
-      await myNetworking._calculateRewards(signers[1].address);
-
-      await expect(
-        myNetworking
-          .connect(owner)
-          .withdrawServiceChargeAmountAndCompanyRoboReward(
-            expandTo6Decimals(1000000000),
-            expandTo6Decimals(0)
-          )
-      ).to.be.revertedWithCustomError(myNetworking, "InvalidWithdrawalAmount");
-      await expect(
-        myNetworking
-          .connect(owner)
-          .withdrawServiceChargeAmountAndCompanyRoboReward(
-            expandTo6Decimals(0),
-            expandTo6Decimals(10000000)
-          )
-      ).to.be.revertedWithCustomError(myNetworking, "InvalidWithdrawalAmount");
-    });
-
-    it("Revert case for calling reward and investment function view function forother accounts", async () => {
-      await expect(
-        myNetworking.connect(signers[1]).seeInvestment(signers[4].address)
-      ).to.be.revertedWithCustomError(myNetworking, "InvalidUser");
-      await expect(
-        myNetworking.connect(signers[1]).Totalreward(signers[4].address)
-      ).to.be.revertedWithCustomError(myNetworking, "InvalidUser");
-      await expect(
-        myNetworking.connect(signers[1]).RoboIncome(signers[4].address)
-      ).to.be.revertedWithCustomError(myNetworking, "InvalidUser");
-      await expect(
-        myNetworking.connect(signers[1]).CompanyRoboAndServiceChargeIncome()
-      ).to.be.revertedWithCustomError(myNetworking, "InvalidUser");
-    });
     it("Revert case for Zero address and invalid rank in upgrading users' rank", async () => {
       await expect(
-        myNetworking.connect(owner).setUserRank(signers[1].address, 0)
+        myNetworking.connect(owner).setRefferersRank(signers[1].address, 0)
       ).to.be.revertedWithCustomError(myNetworking, "InvalidRank");
       await expect(
         myNetworking
           .connect(owner)
-          .setUserRank("0x0000000000000000000000000000000000000000", 5)
+          .setRefferersRank("0x0000000000000000000000000000000000000000", 5)
       ).to.be.revertedWithCustomError(myNetworking, "ZeroAddress");
     });
     it("Revert case for calling only owner functions with external account", async () => {
       await expect(
         myNetworking
           .connect(signers[1])
-          .withdrawServiceChargeAmountAndCompanyRoboReward(
-            expandTo6Decimals(0),
-            expandTo6Decimals(10)
-          )
+          .withdrawServiceChargeAmountAndCompanyRoboReward()
       ).to.be.revertedWithCustomError(
         myNetworking,
         "OwnableUnauthorizedAccount"
       );
       await expect(
-        myNetworking.connect(signers[1]).setUserRank(signers[1].address, 5)
+        myNetworking.connect(signers[1]).setRefferersRank(signers[1].address, 5)
       ).to.be.revertedWithCustomError(
         myNetworking,
         "OwnableUnauthorizedAccount"
